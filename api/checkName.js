@@ -1,48 +1,90 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 
 export default async function handler(req, res) {
-    // 1. Erlaube deinem Spiel, auf diesen Server zuzugreifen (CORS)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // 1. CORS-Header setzen (Behebt den "NetworkError")
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Erlaubt den Zugriff von überall
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-    // Beantworte die Vorab-Sicherheitsanfrage des Browsers
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+  // 2. Preflight-Anfrage (OPTIONS) sofort erfolgreich beantworten
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-    // 2. Wir akzeptieren nur POST-Anfragen
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: "Only POST allowed" });
-    }
+  // Wir akzeptieren nur POST-Anfragen
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Nur POST-Anfragen sind erlaubt' });
+  }
 
-    try {
-        const { name } = req.body;
-        if (!name || name.trim() === "") {
-            return res.status(200).json({ isBad: true });
-        }
+  const { name } = req.body;
 
-        // 3. Mit Gemini verbinden (Key kommt sicher aus den Vercel Settings)
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  if (!name) {
+    return res.status(400).json({ error: 'Kein Name übergeben' });
+  }
 
-        // 4. Der strenge Prompt für die KI
-        const prompt = `Du bist ein strenger Filter für Spielernamen eines Schulquiz. Prüfe den Namen "${name}" auf: Schimpfwörter, sexuelle Begriffe, Leetspeak (wie p!mm3l oder w1xXer), unangebrachte Jugendwörter (goon, edger etc.) und Diktatoren. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt in exakt diesem Format: {"isBad": true} oder {"isBad": false}. Schreibe absolut keinen anderen Text.`;
+  try {
+    // 3. Gemini API initialisieren (Der Key muss in den Vercel Einstellungen als Environment Variable liegen!)
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
+    // 4. Sicherheitsfilter lockern! (Sehr wichtig, damit "Unterhose" nicht direkt geblockt wird)
+    const safetySettings = [
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+      },
+    ];
 
-        // 5. Lese die KI Antwort und sende sie ans Spiel zurück
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            const jsonResult = JSON.parse(jsonMatch[0]);
-            return res.status(200).json({ isBad: jsonResult.isBad });
-        } else {
-            return res.status(200).json({ isBad: false }); 
-        }
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      safetySettings: safetySettings,
+    });
 
-    } catch (error) {
-        console.error("Gemini API Fehler:", error);
-        return res.status(200).json({ isBad: false });
-    }
+    // 5. Der genaue Prompt, der den Unterschied zwischen Spaß und Beleidigung erklärt
+    const prompt = `
+    Du bist ein Namensfilter für ein lockeres, lustiges Schul-Quiz. Deine Aufgabe ist es zu entscheiden, ob ein Spielername erlaubt ist oder blockiert werden muss.
+
+    ERLAUBT (Antworte mit ACCEPT):
+    - Normale Vornamen und Namen (z.B. "Max", "Julia")
+    - Alberne Wörter, Kleidungsstücke und Alltagsgegenstände (z.B. "Unterhose", "Höschen", "Socke", "Käsefuß")
+    - Leichte, kindische Scherze (z.B. "Furzkissen", "Dummkopf", "Lauch")
+
+    VERBOTEN (Antworte mit REJECT):
+    - Harte Beleidigungen und Schimpfwörter (z.B. "Hurensohn", "Wichser", "Fotze")
+    - Harter Rassismus, Antisemitismus, Nazisymbole (z.B. "Hitler", "N-Wort")
+    - Echte Pornografie oder extrem sexuelle Begriffe.
+
+    Bewerte diesen Namen: "${name}"
+
+    Antworte AUSSCHLIESSLICH mit exakt einem Wort: ACCEPT oder REJECT.
+    `;
+
+    // Anfrage an die KI senden
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim().toUpperCase();
+
+    // Auswerten: Wenn die KI "REJECT" sagt, ist der Name unangebracht (isBad = true)
+    const isBad = responseText.includes('REJECT');
+
+    // Antwort an dein HTML Frontend zurücksenden
+    return res.status(200).json({ isBad: isBad });
+
+  } catch (error) {
+    console.error('Gemini API Fehler:', error);
+    // Bei einem Fehler (z.B. API Key falsch) senden wir einen Server-Fehler.
+    // Dein Frontend erkennt das und nutzt automatisch den lokalen 5-Wörter Notfall-Filter!
+    return res.status(500).json({ error: 'Interner Serverfehler' });
+  }
 }
