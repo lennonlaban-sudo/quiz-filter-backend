@@ -32,6 +32,13 @@ export default async function handler(req, res) {
         // 3. Das ist das "Gehirn" des Filters. Hier stehen die exakten Regeln:
         const prompt = `Du bist ein hochintelligenter und strenger Filter für Spielernamen eines Schulquiz für Kinder und Jugendliche. 
 Dein Ziel ist es, zu entscheiden, ob der Name "${name}" verboten werden muss.
+Du bist ein hochpräziser Filter für Benutzernamen in einem Schülerspiel. Deine Aufgabe ist es, zu bestimmen, ob ein Name gegen Jugendschutzrichtlinien verstößt.
+
+Analysiere den Namen auf folgende Kriterien:
+1. Sexuelle Anspielungen oder explizite sexuelle Begriffe (auch in Kombination mit anderen Wörtern).
+2. Obszöne Sprache oder vulgäre Fäkalbegriffe.
+3. Diskriminierende, rassistische oder fremdenfeindliche Inhalte.
+4. Mobbing oder beleidigende Namen gegen andere Schüler.
 
 REGELN FÜR VERBOT (isBad: true):
 - Starke deutsche und englische Schimpfwörter/Beleidigungen (z.B. Hurensohn, fuck, bitch, cunt, wixxer, wichser).
