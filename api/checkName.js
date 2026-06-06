@@ -38,6 +38,7 @@ REGELN FÜR VERBOT (isBad: true):
 - Sexuelle Begriffe, Körperteile und Pornografie (Pimmel, Fotze, Titten, dick, cock, vagina, porno, etc.).
 - Unangebrachte Jugendwörter/Internetslang im sexuellen Kontext (goon, goonen, edger, etc.).
 - Diktatoren und extremistische Begriffe (Hitler, Nazi, Stalin).
+- Zb. aber auch Sachen, wie "Arschfick", "Arschficker", etc.
 - ACHTUNG: Erkenne unbedingt Umschreibungen und Täuschungsversuche! Leetspeak (P1mm3l, h!tl3r, @sshole), fehlende oder zusätzliche Buchstaben (wixer, wixxxer, fck, b!tch) oder versteckte Leerzeichen (f u c k, p i m m e l) müssen gnadenlos blockiert werden.
 
 REGELN FÜR ERLAUBT (isBad: false):
